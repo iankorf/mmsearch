@@ -5,12 +5,21 @@ import csv
 import gzip
 import json
 import os
-import random
 import re
 import sqlite3
 import sys
 import time
 
+def download_files(arg):
+	os.system(f'mkdir -p {arg.build}')
+	if not os.path.exists(f'{arg.build}/mgi_gpi.gz'):
+		os.system(f'curl {arg.mgi_gpi} > {arg.build}/mgi_gpi.gz')
+	if not os.path.exists(f'{arg.build}/mgi_gaf.gz'):
+		os.system(f'curl {arg.mgi_gaf} > {arg.build}/mgi_gaf.gz')
+	if not os.path.exists(f'{arg.build}/go_basic.json.gz'):
+		os.system(f'curl {arg.go_basic} | gzip > {arg.build}/go_basic.json.gz')
+	if not os.path.exists(f'{arg.build}/mp.json.gz'):
+		os.system(f'curl {arg.mp} | gzip > {arg.build}/mp.json.gz')
 
 def create_database(arg):
 	if os.path.exists(arg.database): sys.exit('database already exists')
@@ -83,7 +92,7 @@ def create_database(arg):
 			mgi_id = row[10]
 			mp_txt = row[15]
 			if mmrrc_id not in data:
-				data[mmrrc_id] = {'mgi': set(), 'mp': set()}
+				data[mmrrc_id] = {'mgi': set(), 'mp': set(), 'go': set()}
 			if mgi_id != '': data[mmrrc_id]['mgi'].add(mgi_id)
 			if mp_txt != '': data[mmrrc_id]['mp'].add(mp_txt)
 
@@ -107,77 +116,91 @@ def create_database(arg):
 			cur.execute(f'INSERT INTO mmrrc2mp VALUES ("{mmrrc_id}", "{mp_id}")')
 	con.commit()
 
-def query_database(arg):
+	# mmrrc2gene table
+	cur.execute('CREATE TABLE mmrrc2gene(mmrrc_id, symbol)')
+	cur.execute('CREATE INDEX idx7 ON mmrrc2gene(mmrrc_id)')
+	cur.execute('CREATE INDEX idx8 ON mmrrc2gene(symbol)')
+	for mmrrc_id in data:
+		for mgi_id in data[mmrrc_id]['mgi']:
+			r = cur.execute(f'SELECT symbol from genes WHERE mgi_id="{mgi_id}"').fetchall()
+			symbols = set()
+			for x in r: symbols.add(x[0])
+			for symbol in symbols:
+				cur.execute(f'INSERT INTO mmrrc2gene VALUES ("{mmrrc_id}", "{symbol}")')
+	con.commit()
+
+	# mmrrc2go table
+	cur.execute('CREATE TABLE mmrrc2go(mmrrc_id, go_id)')
+	cur.execute('CREATE INDEX idx9 ON mmrrc2go(mmrrc_id)')
+	cur.execute('CREATE INDEX idx10 ON mmrrc2go(go_id)')
+	for mmrrc_id in data:
+		for mgi_id in data[mmrrc_id]['mgi']:
+			r = cur.execute(f'SELECT go_id from mgi2go WHERE mgi_id="{mgi_id}"').fetchall()
+			go_ids = set()
+			for x in r: go_ids.add(x[0])
+			for go_id in go_ids:
+				cur.execute(f'INSERT INTO mmrrc2go VALUES ("{mmrrc_id}", "{go_id}")')
+	con.commit()
+
+def test(arg):
 	con = sqlite3.connect(f'file:{arg.database}?mode=ro', uri=True)
 	cur = con.cursor()
-	result = {}
-	for id in arg.goids:
-		r = cur.execute(f'SELECT mmid from go2mm WHERE goid="{id}"').fetchall()
-		con.commit()
-		mids = [x[0] for x in r]
-		result[id] = mids
-	print(json.dumps(result, indent=2))
 
-def download_files(arg):
-	os.system(f'mkdir -p {arg.build}')
-	if not os.path.exists(f'{arg.build}/mgi_gpi.gz'):
-		os.system(f'curl {arg.mgi_gpi} > {arg.build}/mgi_gpi.gz')
-	if not os.path.exists(f'{arg.build}/mgi_gaf.gz'):
-		os.system(f'curl {arg.mgi_gaf} > {arg.build}/mgi_gaf.gz')
-	if not os.path.exists(f'{arg.build}/go_basic.json.gz'):
-		os.system(f'curl {arg.go_basic} | gzip > {arg.build}/go_basic.json.gz')
-	if not os.path.exists(f'{arg.build}/mp.json.gz'):
-		os.system(f'curl {arg.mp} | gzip > {arg.build}/mp.json.gz')
+	# get some random identifiers for testing
+	symbols = [x[0] for x in cur.execute(f'SELECT symbol FROM genes ORDER BY RANDOM() LIMIT {arg.limit}').fetchall()]
 
-def testing(arg):
-	con = sqlite3.connect(f'file:{arg.database}?mode=ro', uri=True)
-	cur = con.cursor()
-	r = cur.execute(f'SELECT symbol, mgi_id from genes limit 1000').fetchall()
-	symbols = []
-	mgi_ids = []
-	for symbol, mgi_id in r:
-		symbols.append(symbol)
-		mgi_ids.append(mgi_id)
-	r = cur.execute(f'SELECT go_id FROM go_nodes limit 1000').fetchall()
-	go_ids = [x[0] for x in r]
-	r = cur.execute(f'SELECT mmrrc_id FROM mmrrc2mgi limit 1000').fetchall()
-	mmrrc_ids = [x[0] for x in r]
+	mgi_ids = [x[0] for x in cur.execute(f'SELECT mgi_id FROM genes ORDER BY RANDOM() LIMIT {arg.limit}').fetchall()]
 
+	go_ids = [x[0] for x in cur.execute(f'SELECT go_id FROM go_nodes ORDER BY RANDOM() LIMIT {arg.limit}').fetchall()]
+
+	mp_ids = [x[0] for x in cur.execute(f'SELECT mp_id FROM mp ORDER BY RANDOM() LIMIT {arg.limit}').fetchall()]
+
+	mmrrc_ids = [x[0] for x in cur.execute(f'SELECT mmrrc_id FROM mmrrc2mgi ORDER BY RANDOM() LIMIT {arg.limit}').fetchall()]
+
+	# mmrrc2gene
 	t0 = time.time()
 	for symbol in symbols:
-		r = cur.execute(f'SELECT mgi_id FROM genes WHERE symbol="{symbol}"').fetchall()
+		r = cur.execute(f'SELECT * FROM mmrrc2gene WHERE symbol="{symbol}"').fetchall()
+		if arg.verbose: print(symbol, r)
 	t1 = time.time()
-	for mgi_id in mgi_ids:
-		r = cur.execute(f'SELECT symbol FROM genes WHERE mgi_id="{mgi_id}"').fetchall()
-	t2 = time.time()
-	for mgi_id in mgi_ids:
-		r = cur.execute(f'SELECT go_id FROM mgi2go WHERE mgi_id="{mgi_id}"').fetchall()
-	t3 = time.time()
+	print(f'{arg.limit} symbol -> mmrrc_id', t1 - t0)
+
+	t0 = time.time()
+	for mmrrc_id in mmrrc_ids:
+		r = cur.execute(f'SELECT * FROM mmrrc2gene WHERE mmrrc_id="{mmrrc_id}"').fetchall()
+		if arg.verbose: print(mmrrc_id, r)
+	t1 = time.time()
+	print(f'{arg.limit} mmrrc_id -> symbol', t1 - t0)
+
+	# mmrrc2go
+	t0 = time.time()
 	for go_id in go_ids:
-		r = cur.execute(f'SELECT mgi_id FROM mgi2go WHERE go_id="{go_id}"').fetchall()
-	t4 = time.time()
-	for mid in mmrrc_ids:
-		r = cur.execute(f'SELECT mgi_id FROM mmrrc2mgi WHERE mmrrc_id="{mid}"').fetchall()
-	t5 = time.time()
-	for mgi_id in mgi_ids:
-		r = cur.execute(f'SELECT mmrrc_id FROM mmrrc2mgi WHERE mgi_id="{mgi_id}"').fetchall()
-	t6 = time.time()
-	for mid in mmrrc_ids:
-		r= cur.execute(f'SELECT mp_id FROM mmrrc2mp WHERE mmrrc_id="{mid}"').fetchall()
-	t7 = time.time()
+		r = cur.execute(f'SELECT * FROM mmrrc2go WHERE go_id="{go_id}"').fetchall()
+		if arg.verbose: print(go_id, r)
+	t1 = time.time()
+	print(f'{arg.limit} go_id -> mmrrc_id', t1 - t0)
 
-	# need to do a join at some point
-	#for go_id in go_ids:
-	#	r = cur.execute(f'SELECT
+	t0 = time.time()
+	for mmrrc_id in mmrrc_ids:
+		r = cur.execute(f'SELECT * FROM mmrrc2go WHERE mmrrc_id="{mmrrc_id}"').fetchall()
+		if arg.verbose: print(mmrrc_id, r)
+	t1 = time.time()
+	print(f'{arg.limit} mmrrc_id -> go_id', t1 - t0)
 
-	print(t1 - t0)
-	print(t2 - t1)
-	print(t3 - t2)
-	print(t4 - t3)
-	print(t5 - t4)
-	print(t6 - t5)
-	print(t7 - t6)
+	# mmrrc2mp
+	t0 = time.time()
+	for mp_id in mp_ids:
+		r = cur.execute(f'SELECT * FROM mmrrc2mp WHERE mp_id="{mp_id}"').fetchall()
+		if arg.verbose: print(mp_id, r)
+	t1 = time.time()
+	print(f'{arg.limit} mp_id -> mmrrc_id', t1 - t0)
 
+	t0 = time.time()
+	for mmrrc_id in mmrrc_ids:
+		r = cur.execute(f'SELECT * FROM mmrrc2mp WHERE mmrrc_id="{mmrrc_id}"').fetchall()
+		if arg.verbose: print(mmrrc_id, r)
+	t1 = time.time()
+	print(f'{arg.limit} mmrrc_id -> mp_id', t1 - t0)
 
 #########
 ## CLI ##
@@ -186,49 +209,44 @@ def testing(arg):
 parser = argparse.ArgumentParser(description='GO to MMRRC database utility')
 sub = parser.add_subparsers(required=True, help='sub-commands')
 
-## create sub-command ##
-sub1 = sub.add_parser('create', help='make database')
-sub1.add_argument('--build', required=False, metavar='<dir>',
-	default='build', help='directory of temp files [%(default)s]')
-sub1.add_argument('--database', required=False, metavar='<file.db>',
-	default='mmsearch.db', help='database [%(default)s]')
-sub1.add_argument('--testing', action='store_true')
-sub1.set_defaults(func=create_database)
-
-## query sub-command ##
-sub2 = sub.add_parser('query', help='query database')
-sub2.add_argument('goids', nargs='+', metavar='<GO:ID>',
-	help='GO identifiers')
-sub2.add_argument('--database', required=False, metavar='<file.db>',
-	default='mmsearch.db', help='database [%(default)s]')
-sub2.set_defaults(func=query_database)
-
 ## download sub-command ##
-sub3 = sub.add_parser('download', help='download MMRRC and MGI files')
-sub3.add_argument('--mmrrc', required=False, metavar='<url>',
+sub1 = sub.add_parser('download', help='download MMRRC and MGI files')
+sub1.add_argument('--mmrrc', required=False, metavar='<url>',
 	default='https://www.mmrrc.org/...',
 	help='[%(default)s]')
-sub3.add_argument('--mgi_gpi', required=False, metavar='<url>',
+sub1.add_argument('--mgi_gpi', required=False, metavar='<url>',
 	default='https://current.geneontology.org/annotations/mgi.gpi.gz',
 	help='URL to MGI GPI file [%(default)s]')
-sub3.add_argument('--mgi_gaf', required=False, metavar='<url>',
+sub1.add_argument('--mgi_gaf', required=False, metavar='<url>',
 	default='https://current.geneontology.org/annotations/mgi.gaf.gz',
 	help='URL TO MGI GAF file [%(default)s]')
-sub3.add_argument('--go_basic', required=False, metavar='<url>',
+sub1.add_argument('--go_basic', required=False, metavar='<url>',
 	default='https://current.geneontology.org/ontology/go-basic.json',
 	help='URL to GO basic json [%(default)s]')
-sub3.add_argument('--mp', required=False, metavar='<url>',
+sub1.add_argument('--mp', required=False, metavar='<url>',
 	default='https://www.informatics.jax.org/downloads/reports/mp.json',
 	help='URL to mammalian phenotype json')
-sub3.add_argument('--build', required=False, metavar='<dir>',
+sub1.add_argument('--build', required=False, metavar='<dir>',
 	default='build', help='directory for temp files [%(default)s]')
-sub3.set_defaults(func=download_files)
+sub1.set_defaults(func=download_files)
+
+## create sub-command ##
+sub2 = sub.add_parser('create', help='make database')
+sub2.add_argument('--build', required=False, metavar='<dir>',
+	default='build', help='directory of temp files [%(default)s]')
+sub2.add_argument('--database', required=False, metavar='<file.db>',
+	default='mmsearch.db', help='database [%(default)s]')
+sub2.add_argument('--testing', action='store_true')
+sub2.set_defaults(func=create_database)
 
 ## test sub-command ##
-sub4 = sub.add_parser('test', help='internal testing')
-sub4.add_argument('--database', required=False, metavar='<file.db>',
+sub3 = sub.add_parser('test', help='internal testing')
+sub3.add_argument('--database', required=False, metavar='<file.db>',
 	default='mmsearch.db', help='database [%(default)s]')
-sub4.set_defaults(func=testing)
+sub3.add_argument('--limit', required=False, metavar='<int>',
+	default=1000, help='number of searches to perform [%(default)i]')
+sub3.add_argument('--verbose', action='store_true')
+sub3.set_defaults(func=test)
 
 ## finish up ##
 arg = parser.parse_args()
