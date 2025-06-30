@@ -214,6 +214,67 @@ def rebuild(arg):
 		time.sleep(1)
 	os.system('mv new.db mmsearch.db')
 
+def fetch_mmrrcids(cur, token, att, table):
+	r = cur.execute(f'SELECT mmrrc_id FROM {table} WHERE {att}="{token}"').fetchall()
+	return [x for (x,) in r]
+
+def browse(arg):
+	from jaal import Jaal
+	import pandas as pd
+
+	con = sqlite3.connect(f'file:{arg.database}?mode=ro', uri=True)
+	cur = con.cursor()
+
+	# get all mmrrc_ids associated with query
+	mmrrc_ids = set()
+	for token in arg.query:
+		if token.startswith('MMRRC:'): mmrrc_ids.update(token)
+		elif token.startswith('MGI:'):
+			mmrrc_ids.update(fetch_mmrrcids(cur, token, 'mgi_id', 'mmrrc2mgi'))
+		elif token.startswith('GO_'):
+			mmrrc_ids.update(fetch_mmrrcids(cur, token, 'go_id', 'mmrrc2go'))
+		elif token.startswith('MP_'):
+			mmrrc_ids.update(fetch_mmrrcids(cur, token, 'mp_id', 'mmrrc2mp'))
+		else:
+			mmrrc_ids.update(fetch_mmrrcids(cur, token, 'symbol', 'mmrrc2gene'))
+
+	# build data structure with all connections
+	data = {}
+	for mmrrc_id in mmrrc_ids:
+		data[mmrrc_id] = {'go': set(), 'mp': set(), 'gene': set()}
+		for (go_id,) in cur.execute(f'SELECT go_id FROM mmrrc2go WHERE mmrrc_id="{mmrrc_id}"').fetchall():
+			data[mmrrc_id]['go'].add(go_id)
+		for (mp_id,) in cur.execute(f'SELECT mp_id FROM mmrrc2mp WHERE mmrrc_id="{mmrrc_id}"').fetchall():
+			data[mmrrc_id]['mp'].add(mp_id)
+		for (symbol,) in cur.execute(f'SELECT symbol FROM mmrrc2gene WHERE mmrrc_id="{mmrrc_id}"').fetchall():
+			data[mmrrc_id]['gene'].add(symbol)
+
+	# create data frames
+	nid = 0
+	nodes = []
+	edges = []
+	for mmrrc_id, d in data.items():
+		parent = nid
+		nodes.append((mmrrc_id, nid))
+		nid += 1
+		for go_id in d['go']:
+			nodes.append((go_id, nid))
+			edges.append((parent, nid))
+			nid += 1
+		for mp_id in d['mp']:
+			nodes.append((mp_id, nid))
+			edges.append((parent, nid))
+			nid += 1
+		for symbol in d['gene']:
+			nodes.append((symbol, nid))
+			edges.append((parent, nid))
+			nid += 1
+
+	nodes_df = pd.DataFrame(nodes, columns=['title', 'id'])
+	edges_df = pd.DataFrame(edges, columns=['from', 'to'])
+	Jaal(edges_df, nodes_df).plot()
+
+
 #########
 ## CLI ##
 #########
@@ -264,6 +325,14 @@ sub3.set_defaults(func=test)
 sub4 = sub.add_parser('rebuild',
 	help='download, create, and rename with default parameters')
 sub4.set_defaults(func=rebuild)
+
+## browse sub-command ##
+sub5 = sub.add_parser('browse', help='create interactive browser')
+sub5.add_argument('query', nargs='+',
+	help='search terms: gene names, G0_*, MP_*, MGI:*, MMRRC:*,')
+sub5.add_argument('--database', required=False, metavar='<file.db>',
+	default='mmsearch.db', help='database [%(default)s]')
+sub5.set_defaults(func=browse)
 
 ## finish up ##
 arg = parser.parse_args()

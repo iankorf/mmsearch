@@ -22,6 +22,9 @@ The database is not designed to be updated, but rather rebuilt. Running
 parameters, saving the database temporarily as `new.db` as it waits for active
 connections to close.
 
+There is a `mmsearch browse` but that launches an interactive browser, but this
+is currently shit.
+
 ## Tables ##
 
 The tables are de-normalized and indexed for optimal retrieval. Clients should
