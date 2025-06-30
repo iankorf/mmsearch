@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 
@@ -21,7 +22,7 @@ def download_files(arg):
 	if not os.path.exists(f'{arg.build}/mp.json.gz'):
 		os.system(f'curl {arg.mp} | gzip > {arg.build}/mp.json.gz')
 	if not os.path.exists(f'{arg.build}/mmrrc.gz'):
-		sys.exit('need to do this automatically, need URL')
+		os.system(f'curl {arg.mmrrc} | gzip > {arg.build}/mmrrc.gz')
 
 def create_database(arg):
 	if os.path.exists(arg.database): sys.exit('database already exists')
@@ -204,6 +205,15 @@ def test(arg):
 	t1 = time.time()
 	print(f'{arg.limit} mmrrc_id -> mp_id', t1 - t0)
 
+def rebuild(arg):
+	os.system('rm -rf build')
+	os.system(f'{sys.argv[0]} download')
+	os.system(f'{sys.argv[0]} create --database new.db')
+	while subprocess.run(('lsof', 'mmsearch.db'), capture_output=True).stdout.decode() != '':
+		print('database in use...', file=sys.stderr, flush=True)
+		time.sleep(1)
+	os.system('mv new.db mmsearch.db')
+
 #########
 ## CLI ##
 #########
@@ -214,7 +224,7 @@ sub = parser.add_subparsers(required=True, help='sub-commands')
 ## download sub-command ##
 sub1 = sub.add_parser('download', help='download MMRRC and MGI files')
 sub1.add_argument('--mmrrc', required=False, metavar='<url>',
-	default='https://www.mmrrc.org/...',
+	default='https://www.mmrrc.org/about/mmrrc_catalog_data.csv',
 	help='[%(default)s]')
 sub1.add_argument('--mgi_gpi', required=False, metavar='<url>',
 	default='https://current.geneontology.org/annotations/mgi.gpi.gz',
@@ -249,6 +259,11 @@ sub3.add_argument('--limit', required=False, metavar='<int>',
 	default=1000, help='number of searches to perform [%(default)i]')
 sub3.add_argument('--verbose', action='store_true')
 sub3.set_defaults(func=test)
+
+## rebuild sub-command ##
+sub4 = sub.add_parser('rebuild',
+	help='download, create, and rename with default parameters')
+sub4.set_defaults(func=rebuild)
 
 ## finish up ##
 arg = parser.parse_args()

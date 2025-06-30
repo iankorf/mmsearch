@@ -1,35 +1,31 @@
 mmsearch
 ========
 
-## Quick Start ##
-
 The `mmsearch` program creates a sqlite3 database for rapid lookups among MMRRC
 ids, MGI ids, gene symbols, GO terms, and MP terms.
 
-Download files into a build directory (default is `./build`). This may take a
-minute or two.
+## Quick Start ##
 
 ```
 mmsearch download
-```
-
-Create the sqlite3 database. This takes about 1.5 minutes.
-
-```
 mmsearch create
-```
-
-Make 6k random queries across the database. This takes about a second.
-
-```
 mmsearch test
 ```
 
+The `download` should complete in a couple minutes. Files are stored in the
+`./build` directory. The `create` should complete in about a minute. The
+database file is `./mmsearch.db`. The `test` runs through 6k queries and
+completes in about a second.
+
+The database is not designed to be updated, but rather rebuilt. Running
+`mmsearch rebuild`, performs the `download` and `create` actions with default
+parameters, saving the database temporarily as `new.db` as it waits for active
+connections to close.
+
 ## Tables ##
 
-The tables are created once by `mmsearch create` and never updated. All of the
-tables are de-normalized and indexed for optimal retrieval. It is intended for
-clients to connect to the `mmsearch.db` database in read-only mode.
+The tables are de-normalized and indexed for optimal retrieval. Clients should
+connect to the database in read-only mode.
 
 ### genes
 
