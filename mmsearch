@@ -20,6 +20,8 @@ def download_files(arg):
 		os.system(f'curl {arg.go_basic} | gzip > {arg.build}/go_basic.json.gz')
 	if not os.path.exists(f'{arg.build}/mp.json.gz'):
 		os.system(f'curl {arg.mp} | gzip > {arg.build}/mp.json.gz')
+	if not os.path.exists(f'{arg.build}/mmrrc.gz'):
+		sys.exit('need to do this automatically, need URL')
 
 def create_database(arg):
 	if os.path.exists(arg.database): sys.exit('database already exists')
