@@ -13,17 +13,18 @@ mmsearch test
 ```
 
 The `download` should complete in a couple minutes. Files are stored in the
-`./build` directory. The `create` should complete in about a minute. The
-database file is `./mmsearch.db`. The `test` runs through 6k queries and
-completes in about a second.
+`./build` directory (~40MB compressed). The `create` should complete in about a
+minute. The database file is `./mmsearch.db` (~1GB compared to the ~400MB of
+uncompressed files). The `test` runs through 6k queries and completes in about
+a second (depending on I/O and OS caching).
 
 The database is not designed to be updated, but rather rebuilt. Running
 `mmsearch rebuild`, performs the `download` and `create` actions with default
-parameters, saving the database temporarily as `new.db` as it waits for active
-connections to close.
+parameters, saving the database temporarily as `./new.db` as it waits for
+active connections to close.
 
 There is a `mmsearch browse` that launches an interactive browser, but this is
-currently shit.
+currently shit and should not be used.
 
 ## Tables ##
 
