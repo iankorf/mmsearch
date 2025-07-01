@@ -22,8 +22,8 @@ The database is not designed to be updated, but rather rebuilt. Running
 parameters, saving the database temporarily as `new.db` as it waits for active
 connections to close.
 
-There is a `mmsearch browse` but that launches an interactive browser, but this
-is currently shit.
+There is a `mmsearch browse` that launches an interactive browser, but this is
+currently shit.
 
 ## Tables ##
 
@@ -109,20 +109,6 @@ CREATE INDEX idx6 ON mmrrc2mp(mp_id);
 | MMRRC:000011-UCD | MP_0000745
 | MMRRC:000011-UCD | MP_0000774
 
-### mmrrc2go
-
-```
-CREATE TABLE mmrrc2go(mmrrc_id, go_id);
-CREATE INDEX idx9 ON mmrrc2go(mmrrc_id);
-CREATE INDEX idx10 ON mmrrc2go(go_id);
-```
-
-| mmrrc_id         | go_id
-|:-----------------|:----------
-| MMRRC:000027-MU  | GO_0051926
-| MMRRC:000028-MU  | GO_0005794
-| MMRRC:000028-MU  | GO_0016020
-
 ### mmrrc2gene
 
 ```
@@ -136,3 +122,17 @@ CREATE INDEX idx8 ON mmrrc2gene(symbol);
 | MMRRC:000001-UNC | Fgg
 | MMRRC:000001-UNC | Fga
 | MMRRC:000002-UNC | Esr2
+
+### mmrrc2go
+
+```
+CREATE TABLE mmrrc2go(mmrrc_id, go_id);
+CREATE INDEX idx9 ON mmrrc2go(mmrrc_id);
+CREATE INDEX idx10 ON mmrrc2go(go_id);
+```
+
+| mmrrc_id         | go_id
+|:-----------------|:----------
+| MMRRC:000027-MU  | GO_0051926
+| MMRRC:000028-MU  | GO_0005794
+| MMRRC:000028-MU  | GO_0016020
